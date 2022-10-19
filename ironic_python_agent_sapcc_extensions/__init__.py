@@ -74,14 +74,9 @@ class SapCc(base.BaseAgentExtension):
             return {"info": "could no parse image_url"}
 
         domain = image_url.netloc.split(".", 1)[1]
-        url = (
-            f"https://repo.{domain}/memoryone/"
-            f"{{vsmp_installer-{vsmp_version}.sh,license.txt}}"
-        )
+        url = f"https://repo.{domain}/memoryone/" f"{{vsmp_installer-{vsmp_version}.sh,license.txt}}"
 
-        utils.execute(
-            "mount", "-t", "efivarfs", "efivarfs", "/sys/firmware/efi/efivars"
-        )
+        utils.execute("mount", "-t", "efivarfs", "efivarfs", "/sys/firmware/efi/efivars")
 
         with tempfile.TemporaryDirectory() as path:
             script_path = f"{path}/install.sh"
@@ -107,9 +102,7 @@ class SapCc(base.BaseAgentExtension):
                 stack.enter_context(self._mount_root())
                 stack.enter_context(self._mount_for_chroot())
                 stack.enter_context(self._mount_tmp_for_chroot())
-                bytes_io = utils.get_command_output(
-                    ["chroot", self.MOUNT_PATH, "/usr/bin/bash", script_path]
-                )
+                bytes_io = utils.get_command_output(["chroot", self.MOUNT_PATH, "/usr/bin/bash", script_path])
                 log = bytes_io.read().decode("utf8")
 
             return {"log": log, "status": "success"}
