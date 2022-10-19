@@ -76,8 +76,6 @@ class SapCc(base.BaseAgentExtension):
         domain = image_url.netloc.split(".", 1)[1]
         url = f"https://repo.{domain}/memoryone/" f"{{vsmp_installer-{vsmp_version}.sh,license.txt}}"
 
-        utils.execute("mount", "-t", "efivarfs", "efivarfs", "/sys/firmware/efi/efivars")
-
         with tempfile.TemporaryDirectory() as path:
             script_path = f"{path}/install.sh"
             with open(script_path, mode="w", encoding="utf8") as script:
