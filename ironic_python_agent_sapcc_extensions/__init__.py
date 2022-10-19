@@ -30,12 +30,12 @@ LOG = log.getLogger(__name__)
 
 def _mount_partition(partition, path):
     if not os.path.ismount(path):
-        LOG.debug('Attempting to mount %(device)s to %(path)s to '
-                  'partition.',
-                  {'device': partition,
-                   'path': path})
+        LOG.debug(
+            "Attempting to mount %(device)s to %(path)s to " "partition.",
+            {"device": partition, "path": path},
+        )
         try:
-            utils.execute('mount', partition, path)
+            utils.execute("mount", partition, path)
         except processutils.ProcessExecutionError as e:
             # NOTE(TheJulia): It seems in some cases,
             # the python os.path.ismount can return False
@@ -43,18 +43,18 @@ def _mount_partition(partition, path):
             # to be becasue it tries to rely on inode on device
             # logic, yet the rules are sometimes different inside
             # ramdisks. So lets check the error first.
-            if 'already mounted' not in e:
+            if "already mounted" not in e:
                 # Raise the error, since this is not a known
                 # failure case
                 raise
             else:
-                LOG.debug('Partition already mounted, proceeding.')
+                LOG.debug("Partition already mounted, proceeding.")
 
 
 class SapCc(base.BaseAgentExtension):
     MOUNT_PATH = "/mnt"
 
-    @base.sync_command('install_vsmp_memoryone')
+    @base.sync_command("install_vsmp_memoryone")
     def install_vsmp_memoryone(self, **kwargs):
         """Yadda yadda"""
         instance_info = self.agent.node.get("instance_info", {})
@@ -74,35 +74,43 @@ class SapCc(base.BaseAgentExtension):
             return {"info": "could no parse image_url"}
 
         domain = image_url.netloc.split(".", 1)[1]
-        url = (f"https://repo.{domain}/memoryone/"
-               f"{{vsmp_installer-{vsmp_version}.sh,license.txt}}")
+        url = (
+            f"https://repo.{domain}/memoryone/"
+            f"{{vsmp_installer-{vsmp_version}.sh,license.txt}}"
+        )
 
-        utils.execute('mount', '-t', 'efivarfs', 'efivarfs',
-                      '/sys/firmware/efi/efivars')
+        utils.execute(
+            "mount", "-t", "efivarfs", "efivarfs", "/sys/firmware/efi/efivars"
+        )
 
         with tempfile.TemporaryDirectory() as path:
             script_path = f"{path}/install.sh"
             with open(script_path, mode="w", encoding="utf8") as script:
-                script.write(textwrap.dedent(
-                    f"""\
+                script.write(
+                    textwrap.dedent(
+                        f"""\
                     set -Eeuo pipefail
                     shopt -s nullglob
                     cd /etc
-                    [ -f resolv.conf ] || ln -s ../run/systemd/resolve/stub-resolv.conf resolv.conf
+                    [ -f resolv.conf ] ||
+                      ln -s ../run/systemd/resolve/stub-resolv.conf resolv.conf
                     cd "{path}"
                     curl --retry 5 -sfZO "{url}"
                     chmod +x ./vsmp_installer*
                     ./vsmp_installer* in -q -n *.txt 2>&1
                     echo "Done"
-                    """))
+                    """
+                    )
+                )
 
             with contextlib.ExitStack() as stack:
                 stack.enter_context(self._mount_root())
                 stack.enter_context(self._mount_for_chroot())
                 stack.enter_context(self._mount_tmp_for_chroot())
-                bytes_io = utils.get_command_output([
-                    "chroot", self.MOUNT_PATH, "/usr/bin/bash", script_path])
-                log = bytes_io.read().decode('utf8')
+                bytes_io = utils.get_command_output(
+                    ["chroot", self.MOUNT_PATH, "/usr/bin/bash", script_path]
+                )
+                log = bytes_io.read().decode("utf8")
 
             return {"log": log, "status": "success"}
 
@@ -112,7 +120,7 @@ class SapCc(base.BaseAgentExtension):
             _mount_partition("LABEL=ROOT", self.MOUNT_PATH)
             yield
         finally:
-            utils.execute('umount', self.MOUNT_PATH)
+            utils.execute("umount", self.MOUNT_PATH)
 
     @contextlib.contextmanager
     def _mount_for_chroot(self):
@@ -123,13 +131,13 @@ class SapCc(base.BaseAgentExtension):
             image._umount_all_partitions(
                 self.MOUNT_PATH,
                 path_variable=image._get_path_variable(),
-                umount_warn_msg="")
+                umount_warn_msg="",
+            )
 
     @contextlib.contextmanager
     def _mount_tmp_for_chroot(self):
         try:
-            utils.execute('mount', '-o', 'bind', '/tmp',
-                          self.MOUNT_PATH + '/tmp')
+            utils.execute("mount", "-o", "bind", "/tmp", self.MOUNT_PATH + "/tmp")
             yield
         finally:
-            utils.execute('umount', self.MOUNT_PATH + '/tmp')
+            utils.execute("umount", self.MOUNT_PATH + "/tmp")
