@@ -100,6 +100,7 @@ class SapCc(base.BaseAgentExtension):
                 stack.enter_context(self._mount_root())
                 stack.enter_context(self._mount_for_chroot())
                 stack.enter_context(self._mount_tmp_for_chroot())
+                stack.enter_context(self._mount_efivars_for_chroot())
                 bytes_io = utils.get_command_output(["chroot", self.MOUNT_PATH, "/usr/bin/bash", script_path])
                 log = bytes_io.read().decode("utf8")
 
@@ -132,3 +133,11 @@ class SapCc(base.BaseAgentExtension):
             yield
         finally:
             utils.execute("umount", self.MOUNT_PATH + "/tmp")
+
+    @contextlib.contextmanager
+    def _mount_efivars_for_chroot(self):
+        try:
+            utils.execute("mount", "-t", "efivarfs", "efivarfs", self.MOUNT_PATH + "/sys/firmware/efi/efivars")
+            yield
+        finally:
+            utils.execute("umount", self.MOUNT_PATH + "/sys/firmware/efi/efivars")
