@@ -58,7 +58,6 @@ class SapCc(base.BaseAgentExtension):
     def install_vsmp_memoryone(self, **kwargs):
         """Yadda yadda"""
         instance_info = self.agent.node.get("instance_info", {})
-        LOG.debug("Node: %s", self.agent.node)
         traits = instance_info.get("traits", [])
         if "CUSTOM_VSMP_MEMORYONE" not in traits:
             return {"info": "required trait missing"}
