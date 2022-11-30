@@ -14,12 +14,14 @@
 
 import contextlib
 import os
+import stat
 import tempfile
 import textwrap
 from urllib.parse import urlparse
 
 from oslo_concurrency import processutils
 from oslo_log import log
+from oslo_serialization import jsonutils
 
 from ironic_python_agent.extensions import base
 from ironic_python_agent.extensions import image
@@ -53,6 +55,7 @@ def _mount_partition(partition, path):
 
 class SapCc(base.BaseAgentExtension):
     MOUNT_PATH = "/mnt"
+    METADATA_PATH = "/openstack/2018-08-27/meta_data.json"
 
     @base.sync_command("install_vsmp_memoryone")
     def install_vsmp_memoryone(self, **kwargs):
@@ -61,9 +64,12 @@ class SapCc(base.BaseAgentExtension):
         traits = instance_info.get("traits", [])
         if "CUSTOM_VSMP_MEMORYONE" not in traits:
             return {"info": "required trait missing"}
-        image_properties = instance_info.get("image_properties", {})
-        vsmp_version = image_properties.get("sapcc.vsmp_version", "latest")
 
+        with (self._mount_config_drive(), open(self.MOUNT_PATH + self.METADATA_PATH, mode="rb") as f):
+            meta_data = jsonutils.load(f)
+            vsmp_version = meta_data.get("meta", {}).get("sap.cloud.vsmp-version", "latest")
+
+        image_properties = instance_info.get("image_properties", {})
         image_url = image_properties.get("direct_url")
         if not image_url:
             return {"info": "no image_url"}
@@ -73,7 +79,7 @@ class SapCc(base.BaseAgentExtension):
             return {"info": "could no parse image_url"}
 
         domain = image_url.netloc.split(".", 1)[1]
-        url = f"https://repo.{domain}/memoryone/" f"{{vsmp_installer-{vsmp_version}.sh,license.txt}}"
+        url = f"https://repo.{domain}/memoryone/{{vsmp_installer-{vsmp_version}.sh,license.txt}}"
 
         with tempfile.TemporaryDirectory() as path:
             script_path = f"{path}/install.sh"
@@ -81,6 +87,7 @@ class SapCc(base.BaseAgentExtension):
                 script.write(
                     textwrap.dedent(
                         f"""\
+                    #!/bin/bash
                     set -Eeuo pipefail
                     shopt -s nullglob
                     cd /etc
@@ -94,16 +101,26 @@ class SapCc(base.BaseAgentExtension):
                     """
                     )
                 )
+            st = os.stat(script_path)
+            os.chmod(script_path, st.st_mode | stat.S_IEXEC)
 
             with contextlib.ExitStack() as stack:
                 stack.enter_context(self._mount_root())
                 stack.enter_context(self._mount_for_chroot())
                 stack.enter_context(self._mount_tmp_for_chroot())
                 stack.enter_context(self._mount_efivars_for_chroot())
-                bytes_io = utils.get_command_output(["chroot", self.MOUNT_PATH, "/usr/bin/bash", script_path])
+                bytes_io = utils.get_command_output(["chroot", self.MOUNT_PATH, script_path])
                 log = bytes_io.read().decode("utf8")
 
             return {"log": log, "status": "success"}
+
+    @contextlib.contextmanager
+    def _mount_config_drive(self):
+        try:
+            _mount_partition("LABEL=config-2", self.MOUNT_PATH)
+            yield
+        finally:
+            utils.execute("umount", self.MOUNT_PATH)
 
     @contextlib.contextmanager
     def _mount_root(self):
