@@ -97,7 +97,7 @@ class SapCc(base.BaseAgentExtension):
                     curl --retry 5 -sfZO "{url}"
                     chmod +x ./vsmp_installer*
                     ./vsmp_installer* in -q -n *.txt 2>&1
-                    echo "Done"
+                    rm -f /etc/resolv.conf
                     """
                     )
                 )
